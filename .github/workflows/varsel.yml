@@ -1,0 +1,45 @@
+name: Borsvarsel
+
+on:
+  schedule:
+    # Hvert 5. minutt, hverdager, 13:00-21:59 UTC. Scriptet sjekker selv om USA-børsen er åpen.
+    - cron: "*/5 13-21 * * 1-5"
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "test = send testvarsel, check = sjekk nå"
+        default: "test"
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      # Husker hvilke nivåer som allerede er varslet i dag, så du ikke får samme varsel flere ganger
+      - uses: actions/cache@v4
+        with:
+          path: alert_state.json
+          key: alert-state-${{ github.run_id }}
+          restore-keys: alert-state-
+
+      - run: pip install -r requirements.txt
+
+      - name: Kjør
+        env:
+          NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
+          MODE: ${{ github.event.inputs.mode }}
+        run: |
+          if [ "$MODE" = "test" ]; then
+            python borsvarsel.py --test
+          elif [ "$MODE" = "check" ]; then
+            python borsvarsel.py --once --force
+          else
+            python borsvarsel.py --once
+          fi
